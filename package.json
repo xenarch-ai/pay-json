@@ -1,0 +1,27 @@
+{
+  "name": "pay-json",
+  "version": "1.0.0",
+  "description": "pay.json — machine-readable pricing standard for AI agents",
+  "type": "module",
+  "bin": {
+    "pay-json-validate": "./dist/tools/validate.js",
+    "pay-json-generate": "./dist/tools/generate.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "validate": "tsx tools/validate.ts"
+  },
+  "keywords": ["pay.json", "x402", "ai-agents", "micropayments", "pricing"],
+  "license": "MIT",
+  "dependencies": {
+    "ajv": "^8.17.0",
+    "ajv-formats": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

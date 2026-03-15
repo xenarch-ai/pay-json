@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "protocol": "x402",
+  "network": "base",
+  "asset": "USDC",
+  "receiver": "0x1234567890abcdef1234567890abcdef12345678",
+  "seller_wallet": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+  "rules": [
+    { "path": "/about", "price_usd": "0" },
+    { "path": "/robots.txt", "price_usd": "0" },
+    { "path": "/**", "price_usd": "0.003" }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://payjson.org/v1/schema.json",
+  "title": "pay.json v1",
+  "description": "Machine-readable pricing manifest for AI agents. Declares payment terms for web content and services.",
+  "type": "object",
+  "required": [
+    "version",
+    "protocol",
+    "network",
+    "asset",
+    "receiver",
+    "seller_wallet",
+    "rules"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": ["1.0"],
+      "description": "Schema version."
+    },
+    "protocol": {
+      "type": "string",
+      "description": "Payment protocol identifier (e.g. \"x402\")."
+    },
+    "network": {
+      "type": "string",
+      "description": "Blockchain network identifier (e.g. \"base\", \"ethereum\")."
+    },
+    "asset": {
+      "type": "string",
+      "description": "Payment asset identifier (e.g. \"USDC\")."
+    },
+    "receiver": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$",
+      "description": "Ethereum address that receives payments."
+    },
+    "seller_wallet": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$",
+      "description": "Ethereum address of the content seller."
+    },
+    "provider": {
+      "type": "string",
+      "description": "Optional payment infrastructure provider."
+    },
+    "facilitator": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional facilitator endpoint URI."
+    },
+    "contact": {
+      "type": "string",
+      "description": "Optional contact information for the publisher."
+    },
+    "terms": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional URI to terms of service."
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Pricing rules mapping URL path patterns to prices.",
+      "items": {
+        "type": "object",
+        "required": ["path", "price_usd"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Glob pattern matching URL paths (e.g. \"/blog/*\", \"/**\")."
+          },
+          "price_usd": {
+            "type": "string",
+            "pattern": "^\\d+(\\.\\d+)?$",
+            "description": "Price in USD as a decimal string (e.g. \"0.01\")."
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
