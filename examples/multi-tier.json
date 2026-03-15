@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "protocol": "x402",
+  "network": "base",
+  "asset": "USDC",
+  "receiver": "0x7a3b9c2d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b",
+  "seller_wallet": "0x9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e",
+  "provider": "xenarch",
+  "facilitator": "https://xenarch.bot/v1/gates",
+  "contact": "billing@example-publisher.com",
+  "terms": "https://example-publisher.com/terms",
+  "rules": [
+    { "path": "/public/*", "price_usd": "0" },
+    { "path": "/blog/*", "price_usd": "0.003" },
+    { "path": "/premium/*", "price_usd": "0.01" },
+    { "path": "/api/*", "price_usd": "0.05" },
+    { "path": "/**", "price_usd": "0.003" }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "protocol": "x402",
+  "network": "base",
+  "asset": "USDC",
+  "receiver": "0x2b4c6d8e0f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c",
+  "seller_wallet": "0x4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f",
+  "provider": "acme-payments",
+  "contact": "api-support@acme-data.com",
+  "terms": "https://acme-data.com/api-terms",
+  "rules": [
+    { "path": "/v1/search", "price_usd": "0.001" },
+    { "path": "/v1/generate", "price_usd": "0.10" },
+    { "path": "/v1/embed", "price_usd": "0.005" }
+  ]
+}
