@@ -9,6 +9,17 @@
   "facilitator": "https://xenarch.dev/v1/gates",
   "contact": "billing@example-publisher.com",
   "terms": "https://example-publisher.com/terms",
+  "tools": {
+    "cli": {
+      "install": "npm install -g xenarch",
+      "usage": "xenarch pay <url>"
+    },
+    "sdk": {
+      "npm": "xenarch",
+      "pypi": "xenarch"
+    },
+    "docs": "https://xenarch.com/docs"
+  },
   "rules": [
     { "path": "/public/*", "price_usd": "0" },
     { "path": "/blog/*", "price_usd": "0.003" },

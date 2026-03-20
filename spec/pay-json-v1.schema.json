@@ -59,6 +59,30 @@
       "format": "uri",
       "description": "Optional URI to terms of service."
     },
+    "tools": {
+      "type": "object",
+      "description": "Optional tooling hints for agents — CLI install commands, SDK packages, and documentation.",
+      "properties": {
+        "cli": {
+          "type": "object",
+          "description": "Command-line tool for making payments.",
+          "properties": {
+            "install": { "type": "string", "description": "Shell command to install the CLI." },
+            "usage": { "type": "string", "description": "Example command to pay for a URL." }
+          }
+        },
+        "sdk": {
+          "type": "object",
+          "description": "SDK package identifiers keyed by registry (e.g. npm, pypi).",
+          "additionalProperties": { "type": "string" }
+        },
+        "docs": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI to integration documentation."
+        }
+      }
+    },
     "rules": {
       "type": "array",
       "minItems": 1,

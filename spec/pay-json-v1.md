@@ -75,6 +75,7 @@ A pay.json file is a JSON object with the following fields:
 | `facilitator`   | No       | string   | URI of a facilitator or verification endpoint.                           |
 | `contact`       | No       | string   | Publisher contact information (email, URL, or other identifier).         |
 | `terms`         | No       | string   | URI pointing to the publisher's terms of service.                        |
+| `tools`         | No       | object   | Tooling hints for agents — CLI, SDKs, docs. See Section 3.3.            |
 
 ### 3.2 Rule Objects
 
@@ -90,7 +91,38 @@ The `price_usd` field is a string rather than a number to avoid
 floating-point precision issues. It MUST match the pattern `^\d+(\.\d+)?$`
 (one or more digits, optionally followed by a decimal point and more digits).
 
-### 3.3 Address Format
+### 3.3 Tools Object
+
+The optional `tools` field helps agents discover how to make payments
+programmatically. It contains pointers to CLI commands, SDK packages, and
+documentation — so an agent reading pay.json can immediately learn what to
+install and run.
+
+| Field  | Type   | Description                                                        |
+|--------|--------|--------------------------------------------------------------------|
+| `cli`  | object | Command-line tool. Contains `install` (shell command) and `usage` (example invocation). |
+| `sdk`  | object | SDK packages keyed by registry name (e.g. `"npm"`, `"pypi"`). Values are package names. |
+| `docs` | string | URI pointing to integration documentation.                         |
+
+All sub-fields are optional. Publishers MAY include any combination.
+
+Example:
+
+```json
+"tools": {
+  "cli": {
+    "install": "npm install -g xenarch",
+    "usage": "xenarch pay <url>"
+  },
+  "sdk": {
+    "npm": "xenarch",
+    "pypi": "xenarch"
+  },
+  "docs": "https://xenarch.com/docs"
+}
+```
+
+### 3.4 Address Format
 
 Both `receiver` and `seller_wallet` MUST be valid Ethereum addresses: the
 prefix `0x` followed by exactly 40 hexadecimal characters (case-insensitive).
@@ -106,7 +138,7 @@ These two addresses serve different purposes:
 
 In the simplest case, both fields may contain the same address.
 
-### 3.4 Example
+### 3.5 Example
 
 ```json
 {
