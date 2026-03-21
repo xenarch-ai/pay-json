@@ -14,6 +14,7 @@ interface GenerateOptions {
   network?: string;
   asset?: string;
   facilitator?: string;
+  provider?: string;
   output?: string;
 }
 
@@ -41,6 +42,25 @@ export function generate(options: GenerateOptions): Record<string, unknown> {
 
   if (options.facilitator) {
     payJson.facilitator = options.facilitator;
+  }
+
+  if (options.provider) {
+    payJson.provider = options.provider;
+
+    // Auto-include tools for known providers.
+    if (options.provider === "xenarch") {
+      payJson.tools = {
+        cli: {
+          install: "npm install -g xenarch",
+          usage: "xenarch pay <url>",
+        },
+        sdk: {
+          npm: "xenarch",
+          pypi: "xenarch",
+        },
+        docs: "https://xenarch.com/docs",
+      };
+    }
   }
 
   // Validate against schema
@@ -113,6 +133,7 @@ async function main() {
           "  --network <net>          Network (default: base)\n" +
           "  --asset <asset>          Asset (default: USDC)\n" +
           "  --facilitator <url>      Facilitator URL (optional)\n" +
+          "  --provider <name>        Provider name (optional, auto-includes tools for known providers)\n" +
           "  --output <file>          Output file (default: stdout)"
       );
       process.exit(1);
@@ -135,6 +156,7 @@ async function main() {
       network: parsed.network,
       asset: parsed.asset,
       facilitator: parsed.facilitator,
+      provider: parsed.provider,
       output: parsed.output,
     };
   }
