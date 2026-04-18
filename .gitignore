@@ -5,3 +5,11 @@ dist/
 Thumbs.db
 .idea/
 .vscode/
+
+# Python reader
+tools/python/.venv/
+tools/python/.pytest_cache/
+tools/python/**/__pycache__/
+tools/python/*.egg-info/
+tools/python/build/
+tools/python/dist/

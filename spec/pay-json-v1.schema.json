@@ -16,7 +16,7 @@
   "properties": {
     "version": {
       "type": "string",
-      "enum": ["1.0"],
+      "enum": ["1.0", "1.1"],
       "description": "Schema version."
     },
     "protocol": {
@@ -99,6 +99,44 @@
             "type": "string",
             "pattern": "^\\d+(\\.\\d+)?$",
             "description": "Price in USD as a decimal string (e.g. \"0.01\")."
+          },
+          "terms": {
+            "type": "object",
+            "description": "(v1.1) What the price buys — billing model and unit.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "description": "Billing model. Common values: per_use, per_minute, per_request, subscription, per_unit. Consumers MUST tolerate unknown values by treating as per_use."
+              },
+              "unit": {
+                "type": "string",
+                "description": "Free-form unit label for per_unit pricing (e.g. \"1000_tokens\", \"image\")."
+              },
+              "quantity": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Quantity included per payment when relevant."
+              }
+            },
+            "additionalProperties": true
+          },
+          "budget_hints": {
+            "type": "object",
+            "description": "(v1.1) Advisory agent spending caps for this rule.",
+            "properties": {
+              "recommended_max_per_call": {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d+)?$",
+                "description": "Suggested per-call cap in USD as a decimal string."
+              },
+              "recommended_max_per_session": {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d+)?$",
+                "description": "Suggested per-session cap in USD as a decimal string."
+              }
+            },
+            "additionalProperties": true
           }
         },
         "additionalProperties": true

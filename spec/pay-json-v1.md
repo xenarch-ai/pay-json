@@ -1,8 +1,13 @@
-# pay.json Specification v1.0
+# pay.json Specification v1.1
 
 **Status:** Draft
-**Date:** 2026-03-15
+**Date:** 2026-04-18
 **License:** [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
+
+> **v1.1** adds two optional, per-rule fields — `terms` and `budget_hints` — to
+> help agents reason about *what* they are paying for and *how much* a
+> publisher considers reasonable. v1.0 files remain valid under v1.1; all new
+> fields are optional and additive. See §12 for migration notes.
 
 ---
 
@@ -64,7 +69,7 @@ A pay.json file is a JSON object with the following fields:
 
 | Field           | Required | Type     | Description                                                              |
 |-----------------|----------|----------|--------------------------------------------------------------------------|
-| `version`       | Yes      | string   | Schema version. MUST be `"1.0"` for this specification.                  |
+| `version`       | Yes      | string   | Schema version. MUST be `"1.0"` or `"1.1"`.                              |
 | `protocol`      | Yes      | string   | Payment protocol identifier (e.g. `"x402"`).                            |
 | `network`       | Yes      | string   | Blockchain or payment network (e.g. `"base"`, `"ethereum"`).            |
 | `asset`         | Yes      | string   | Payment token or currency (e.g. `"USDC"`).                              |
@@ -82,10 +87,12 @@ A pay.json file is a JSON object with the following fields:
 The `rules` array MUST contain at least one rule object. Each rule object has
 the following fields:
 
-| Field       | Required | Type   | Description                                                               |
-|-------------|----------|--------|---------------------------------------------------------------------------|
-| `path`      | Yes      | string | Glob pattern matching URL paths (e.g. `"/blog/*"`, `"/**"`).             |
-| `price_usd` | Yes      | string | Price in US dollars, expressed as a decimal string (e.g. `"0.003"`).     |
+| Field          | Required | Type   | Description                                                               |
+|----------------|----------|--------|---------------------------------------------------------------------------|
+| `path`         | Yes      | string | Glob pattern matching URL paths (e.g. `"/blog/*"`, `"/**"`).             |
+| `price_usd`    | Yes      | string | Price in US dollars, expressed as a decimal string (e.g. `"0.003"`).     |
+| `terms`        | No       | object | (v1.1) What the price buys. See Section 3.4.                             |
+| `budget_hints` | No       | object | (v1.1) Suggested agent spending caps. See Section 3.5.                   |
 
 The `price_usd` field is a string rather than a number to avoid
 floating-point precision issues. It MUST match the pattern `^\d+(\.\d+)?$`
@@ -122,7 +129,63 @@ Example:
 }
 ```
 
-### 3.4 Address Format
+### 3.4 Terms Object (v1.1)
+
+The optional `terms` field on a rule describes what a single payment unit
+actually buys. It helps agents reason about the offer before committing to
+a price that they can otherwise only guess about.
+
+| Field      | Required | Type   | Description                                                          |
+|------------|----------|--------|----------------------------------------------------------------------|
+| `type`     | Yes      | string | Billing model: `"per_use"`, `"per_minute"`, `"per_request"`, `"subscription"`, or `"per_unit"`. |
+| `unit`     | No       | string | Free-form unit label for `per_unit` pricing (e.g. `"1000_tokens"`, `"image"`, `"api_call"`). |
+| `quantity` | No       | number | Quantity included per payment when relevant (e.g. 5 minutes of access for `per_minute` with `quantity: 5`). |
+
+Consumers MUST tolerate unknown `type` values by treating the rule as
+`per_use`. This keeps future additions (e.g. `"per_token"`) backward compatible.
+
+Example:
+
+```json
+{
+  "path": "/api/inference/*",
+  "price_usd": "0.01",
+  "terms": { "type": "per_unit", "unit": "1000_tokens" }
+}
+```
+
+### 3.5 Budget Hints Object (v1.1)
+
+The optional `budget_hints` field lets publishers communicate *recommended*
+agent spending limits for a rule. Hints are advisory — agents remain in full
+control of their own budget policy — but they give agents a sensible default
+when none has been set by the user.
+
+| Field                           | Required | Type   | Description                                                 |
+|---------------------------------|----------|--------|-------------------------------------------------------------|
+| `recommended_max_per_call`      | No       | string | Suggested per-call cap in USD as a decimal string.          |
+| `recommended_max_per_session`   | No       | string | Suggested per-session cap in USD as a decimal string.       |
+
+Both fields, when present, MUST match the same `^\d+(\.\d+)?$` pattern as
+`price_usd`.
+
+Agents SHOULD treat hints as the *lower* of (hint, agent's own configured
+cap). A hint cannot override a stricter agent-side limit.
+
+Example:
+
+```json
+{
+  "path": "/report/*",
+  "price_usd": "0.25",
+  "budget_hints": {
+    "recommended_max_per_call": "0.25",
+    "recommended_max_per_session": "2.50"
+  }
+}
+```
+
+### 3.6 Address Format
 
 Both `receiver` and `seller_wallet` MUST be valid Ethereum addresses: the
 prefix `0x` followed by exactly 40 hexadecimal characters (case-insensitive).
@@ -138,7 +201,7 @@ These two addresses serve different purposes:
 
 In the simplest case, both fields may contain the same address.
 
-### 3.5 Example
+### 3.7 Example
 
 ```json
 {
@@ -360,7 +423,38 @@ accordance with [RFC 8615](https://www.rfc-editor.org/rfc/rfc8615).
 
 ---
 
-## 11. References
+## 11. Changelog
+
+### v1.1 — 2026-04-18
+
+- Added optional per-rule `terms` object (Section 3.4) for billing-model disclosure.
+- Added optional per-rule `budget_hints` object (Section 3.5) for advisory spending caps.
+- `version` enum now accepts `"1.0"` or `"1.1"`.
+- All v1.0 files remain valid under v1.1. No breaking changes.
+
+### v1.0 — 2026-03-15
+
+- Initial published version.
+
+---
+
+## 12. Migration from v1.0
+
+v1.1 is a superset of v1.0:
+
+- A v1.0 file is a valid v1.1 file. No changes required.
+- A v1.0 consumer reading a v1.1 file will safely ignore `terms` and
+  `budget_hints` under §9.1 (Unknown Fields).
+- A v1.1 consumer reading a v1.0 file MUST treat missing `terms` as
+  `{type: "per_use"}` and missing `budget_hints` as absent.
+
+Publishers who set `version: "1.1"` SHOULD populate at least one of the new
+fields on at least one rule — otherwise there is no reason to bump the
+version.
+
+---
+
+## 13. References
 
 - [RFC 8615](https://www.rfc-editor.org/rfc/rfc8615) — Well-Known URIs
 - [RFC 7231](https://www.rfc-editor.org/rfc/rfc7231) — HTTP/1.1 Semantics
