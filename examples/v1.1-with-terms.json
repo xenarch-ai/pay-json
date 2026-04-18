@@ -1,0 +1,35 @@
+{
+  "version": "1.1",
+  "protocol": "x402",
+  "network": "base",
+  "asset": "USDC",
+  "receiver": "0x7a3b9c2d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b",
+  "seller_wallet": "0x9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e",
+  "contact": "billing@example.com",
+  "rules": [
+    {
+      "path": "/api/inference/*",
+      "price_usd": "0.01",
+      "terms": { "type": "per_unit", "unit": "1000_tokens" },
+      "budget_hints": {
+        "recommended_max_per_call": "0.05",
+        "recommended_max_per_session": "1.00"
+      }
+    },
+    {
+      "path": "/stream/*",
+      "price_usd": "0.005",
+      "terms": { "type": "per_minute", "quantity": 1 }
+    },
+    {
+      "path": "/report/*",
+      "price_usd": "0.25",
+      "terms": { "type": "per_use" },
+      "budget_hints": {
+        "recommended_max_per_call": "0.25",
+        "recommended_max_per_session": "2.50"
+      }
+    },
+    { "path": "/**", "price_usd": "0.003" }
+  ]
+}
