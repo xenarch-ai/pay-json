@@ -1,5 +1,5 @@
 {
-  "version": "1.0",
+  "version": "1.2",
   "protocol": "x402",
   "network": "base",
   "asset": "USDC",

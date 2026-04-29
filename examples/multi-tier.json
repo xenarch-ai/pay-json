@@ -1,12 +1,17 @@
 {
-  "version": "1.0",
+  "version": "1.2",
   "protocol": "x402",
   "network": "base",
   "asset": "USDC",
   "receiver": "0x7a3b9c2d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b",
-  "seller_wallet": "0x9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e",
+  "seller_wallet": "0x7a3b9c2d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b",
+  "facilitators": [
+    { "name": "payai",        "url": "https://facilitator.payai.network", "priority": 1, "spec_version": "v2" },
+    { "name": "xpay",         "url": "https://facilitator.xpay.sh",       "priority": 2, "spec_version": "v2" },
+    { "name": "ultravioleta", "url": "https://x402.ultravioleta.dev",     "priority": 3, "spec_version": "v2" }
+  ],
+  "verifier": "https://xenarch.dev/v1/verify",
   "provider": "xenarch",
-  "facilitator": "https://xenarch.dev/v1/gates",
   "contact": "billing@example-publisher.com",
   "terms": "https://example-publisher.com/terms",
   "tools": {

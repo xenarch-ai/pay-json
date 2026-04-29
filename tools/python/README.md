@@ -25,8 +25,10 @@ if rule:
     print(rule.terms)       # {"type": "per_unit", "unit": "1000_tokens"}
 ```
 
-Supports both v1.0 and v1.1 of the pay.json spec. v1.1 adds optional
-per-rule `terms` and `budget_hints` fields.
+Targets pay.json v1.2 (the current spec). v1.2 introduces a
+`facilitators[]` array (multi-facilitator failover), an optional
+`verifier` endpoint, and drops the pre-1.2 single-string `facilitator`
+field. Pre-1.2 documents are not accepted.
 
 ## License
 

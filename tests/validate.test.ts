@@ -47,12 +47,12 @@ describe("validate function", () => {
     writeFileSync(
       file,
       JSON.stringify({
-        version: "1.0",
+        version: "1.2",
         protocol: "x402",
         network: "base",
         asset: "USDC",
         receiver: "0x1234567890abcdef1234567890abcdef12345678",
-        seller_wallet: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        seller_wallet: "0x1234567890abcdef1234567890abcdef12345678",
         rules: [
           { path: "/*", price_usd: "0.003" },
           { path: "/blog/*", price_usd: "0.01" },
