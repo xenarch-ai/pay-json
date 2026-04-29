@@ -8,15 +8,26 @@ pay.json tells AI agents what content costs and how to pay for it. Publishers pl
 
 ```json
 {
-  "version": "1.0",
-  "publisher": "example.com",
-  "default": {
-    "price": 0.001,
-    "currency": "USD",
-    "methods": ["x402"]
-  }
+  "version": "1.2",
+  "protocol": "x402",
+  "network": "base",
+  "asset": "USDC",
+  "receiver": "0x1234567890abcdef1234567890abcdef12345678",
+  "seller_wallet": "0x1234567890abcdef1234567890abcdef12345678",
+  "facilitators": [
+    { "name": "payai", "url": "https://facilitator.payai.network", "priority": 1, "spec_version": "v2" },
+    { "name": "xpay",  "url": "https://facilitator.xpay.sh",       "priority": 2, "spec_version": "v2" }
+  ],
+  "rules": [
+    { "path": "/blog/*",    "price_usd": "0.003" },
+    { "path": "/premium/*", "price_usd": "0.01"  }
+  ]
 }
 ```
+
+`facilitators[]` lets the publisher list which x402 facilitators they
+accept. Agents try them in order and fall back through the list. No single
+intermediary sits in the money path.
 
 ## Specification
 

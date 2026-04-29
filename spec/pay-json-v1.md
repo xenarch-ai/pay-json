@@ -1,13 +1,14 @@
-# pay.json Specification v1.1
+# pay.json Specification v1.2
 
 **Status:** Draft
-**Date:** 2026-04-18
+**Date:** 2026-04-23
 **License:** [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
 
-> **v1.1** adds two optional, per-rule fields — `terms` and `budget_hints` — to
-> help agents reason about *what* they are paying for and *how much* a
-> publisher considers reasonable. v1.0 files remain valid under v1.1; all new
-> fields are optional and additive. See §12 for migration notes.
+> **v1.2** is a breaking change. The single-string `facilitator` field is
+> replaced with a `facilitators[]` array of structured entries (name, url,
+> priority, spec_version). A new optional `verifier` field points to an
+> independent settlement-verification endpoint. Pre-1.2 files are not
+> accepted by this version of the schema.
 
 ---
 
@@ -32,11 +33,14 @@ communicate pricing to these agents that is:
 - **Zero-code** — a static JSON file, no server-side logic required.
 - **Host-agnostic** — works on any web server, CDN, or static host.
 - **Protocol-flexible** — supports any payment protocol, starting with x402.
+- **Facilitator-agnostic** — publishers list the facilitators they accept,
+  agents pick one and fall back through the list. No single intermediary
+  is in the money path.
 
 pay.json solves this by giving publishers a declarative way to say: "This
-content costs X, pay to address Y, using protocol Z." Agents read the file,
-evaluate the rules, and decide whether to pay — all before requesting the
-protected resource.
+content costs X, pay to address Y, using protocol Z, settled through any of
+these facilitators." Agents read the file, evaluate the rules, choose a
+facilitator, and pay — all before requesting the protected resource.
 
 ---
 
@@ -69,18 +73,19 @@ A pay.json file is a JSON object with the following fields:
 
 | Field           | Required | Type     | Description                                                              |
 |-----------------|----------|----------|--------------------------------------------------------------------------|
-| `version`       | Yes      | string   | Schema version. MUST be `"1.0"` or `"1.1"`.                              |
-| `protocol`      | Yes      | string   | Payment protocol identifier (e.g. `"x402"`).                            |
-| `network`       | Yes      | string   | Blockchain or payment network (e.g. `"base"`, `"ethereum"`).            |
-| `asset`         | Yes      | string   | Payment token or currency (e.g. `"USDC"`).                              |
-| `receiver`      | Yes      | string   | Address that receives payment. Ethereum address format (`0x` + 40 hex). |
-| `seller_wallet` | Yes      | string   | Publisher's wallet address. Ethereum address format (`0x` + 40 hex).    |
-| `rules`         | Yes      | array    | Ordered list of path-to-price rules. See Section 3.2.                   |
+| `version`       | Yes      | string   | Schema version. MUST be `"1.2"`.                                         |
+| `protocol`      | Yes      | string   | Payment protocol identifier (e.g. `"x402"`).                             |
+| `network`       | Yes      | string   | Blockchain or payment network (e.g. `"base"`, `"ethereum"`).             |
+| `asset`         | Yes      | string   | Payment token or currency (e.g. `"USDC"`).                               |
+| `receiver`      | Yes      | string   | Address that receives payment. Ethereum address format (`0x` + 40 hex).  |
+| `seller_wallet` | Yes      | string   | Publisher's wallet address. Ethereum address format (`0x` + 40 hex).     |
+| `rules`         | Yes      | array    | Ordered list of path-to-price rules. See Section 3.2.                    |
+| `facilitators`  | No       | array    | Ordered list of accepted facilitators. See Section 3.3.                  |
+| `verifier`      | No       | string   | Optional independent verifier endpoint URI. See Section 3.4.             |
 | `provider`      | No       | string   | Payment infrastructure provider identifier.                              |
-| `facilitator`   | No       | string   | URI of a facilitator or verification endpoint.                           |
 | `contact`       | No       | string   | Publisher contact information (email, URL, or other identifier).         |
 | `terms`         | No       | string   | URI pointing to the publisher's terms of service.                        |
-| `tools`         | No       | object   | Tooling hints for agents — CLI, SDKs, docs. See Section 3.3.            |
+| `tools`         | No       | object   | Tooling hints for agents — CLI, SDKs, docs. See Section 3.5.             |
 
 ### 3.2 Rule Objects
 
@@ -91,19 +96,68 @@ the following fields:
 |----------------|----------|--------|---------------------------------------------------------------------------|
 | `path`         | Yes      | string | Glob pattern matching URL paths (e.g. `"/blog/*"`, `"/**"`).             |
 | `price_usd`    | Yes      | string | Price in US dollars, expressed as a decimal string (e.g. `"0.003"`).     |
-| `terms`        | No       | object | (v1.1) What the price buys. See Section 3.4.                             |
-| `budget_hints` | No       | object | (v1.1) Suggested agent spending caps. See Section 3.5.                   |
+| `terms`        | No       | object | What the price buys. See Section 3.6.                                    |
+| `budget_hints` | No       | object | Suggested agent spending caps. See Section 3.7.                          |
 
 The `price_usd` field is a string rather than a number to avoid
 floating-point precision issues. It MUST match the pattern `^\d+(\.\d+)?$`
 (one or more digits, optionally followed by a decimal point and more digits).
 
-### 3.3 Tools Object
+### 3.3 Facilitators Array
+
+The optional `facilitators` field is an ordered array of facilitator entries
+the publisher is willing to settle through. Each entry has:
+
+| Field          | Required | Type    | Description                                                       |
+|----------------|----------|---------|-------------------------------------------------------------------|
+| `name`         | Yes      | string  | Short identifier (e.g. `"payai"`, `"xpay"`, `"ultravioleta"`).    |
+| `url`          | Yes      | string  | Facilitator base URL.                                             |
+| `priority`     | No       | integer | Lower numbers preferred. Equal priorities MAY be load-balanced.   |
+| `spec_version` | No       | string  | x402 spec version this facilitator implements: `"v1"` or `"v2"`.  |
+
+Agents SHOULD attempt facilitators in array order (or by `priority` if
+present) and fall back through the list on failure.
+
+When `facilitators` is absent or empty, agents SHOULD fall back to a
+built-in default stack. The Xenarch reference SDK defaults to
+`[payai, xpay, ultravioleta, x402.rs]`. Coinbase is configurable but never
+default.
+
+`spec_version` matters because the V1 retry header is `X-PAYMENT` and the
+V2 retry header is `PAYMENT-SIGNATURE` — agents that hardcode one will
+silently fail against the other. When omitted, agents SHOULD probe the
+facilitator's 402 response to detect the version.
+
+Example:
+
+```json
+"facilitators": [
+  { "name": "payai", "url": "https://facilitator.payai.network", "priority": 1, "spec_version": "v2" },
+  { "name": "xpay",  "url": "https://facilitator.xpay.sh",       "priority": 2, "spec_version": "v2" },
+  { "name": "ultravioleta", "url": "https://x402.ultravioleta.dev", "priority": 3, "spec_version": "v2" }
+]
+```
+
+### 3.4 Verifier Field
+
+The optional `verifier` field is a URL where agents MAY query to verify
+settlement independently of the facilitator that performed it. This is the
+hook used by the Xenarch commercial layer to issue signed Ed25519 receipts
+that prove a settlement on behalf of a publisher.
+
+The verifier is decoupled from facilitators on purpose: a publisher MAY
+accept settlement through any of N facilitators while delegating receipt
+issuance to a single trusted verifier.
+
+When omitted, agents SHOULD treat settlement as confirmed by the
+facilitator's `X-PAYMENT-RESPONSE` (V1) or `PAYMENT-RESPONSE` (V2) header
+and an on-chain transaction hash.
+
+### 3.5 Tools Object
 
 The optional `tools` field helps agents discover how to make payments
 programmatically. It contains pointers to CLI commands, SDK packages, and
-documentation — so an agent reading pay.json can immediately learn what to
-install and run.
+documentation.
 
 | Field  | Type   | Description                                                        |
 |--------|--------|--------------------------------------------------------------------|
@@ -111,55 +165,26 @@ install and run.
 | `sdk`  | object | SDK packages keyed by registry name (e.g. `"npm"`, `"pypi"`). Values are package names. |
 | `docs` | string | URI pointing to integration documentation.                         |
 
-All sub-fields are optional. Publishers MAY include any combination.
+All sub-fields are optional.
 
-Example:
-
-```json
-"tools": {
-  "cli": {
-    "install": "npm install -g xenarch",
-    "usage": "xenarch pay <url>"
-  },
-  "sdk": {
-    "npm": "xenarch",
-    "pypi": "xenarch"
-  },
-  "docs": "https://xenarch.com/docs"
-}
-```
-
-### 3.4 Terms Object (v1.1)
+### 3.6 Terms Object
 
 The optional `terms` field on a rule describes what a single payment unit
-actually buys. It helps agents reason about the offer before committing to
-a price that they can otherwise only guess about.
+actually buys.
 
 | Field      | Required | Type   | Description                                                          |
 |------------|----------|--------|----------------------------------------------------------------------|
 | `type`     | Yes      | string | Billing model: `"per_use"`, `"per_minute"`, `"per_request"`, `"subscription"`, or `"per_unit"`. |
 | `unit`     | No       | string | Free-form unit label for `per_unit` pricing (e.g. `"1000_tokens"`, `"image"`, `"api_call"`). |
-| `quantity` | No       | number | Quantity included per payment when relevant (e.g. 5 minutes of access for `per_minute` with `quantity: 5`). |
+| `quantity` | No       | number | Quantity included per payment when relevant. |
 
 Consumers MUST tolerate unknown `type` values by treating the rule as
-`per_use`. This keeps future additions (e.g. `"per_token"`) backward compatible.
+`per_use`.
 
-Example:
-
-```json
-{
-  "path": "/api/inference/*",
-  "price_usd": "0.01",
-  "terms": { "type": "per_unit", "unit": "1000_tokens" }
-}
-```
-
-### 3.5 Budget Hints Object (v1.1)
+### 3.7 Budget Hints Object
 
 The optional `budget_hints` field lets publishers communicate *recommended*
-agent spending limits for a rule. Hints are advisory — agents remain in full
-control of their own budget policy — but they give agents a sensible default
-when none has been set by the user.
+agent spending limits for a rule. Hints are advisory.
 
 | Field                           | Required | Type   | Description                                                 |
 |---------------------------------|----------|--------|-------------------------------------------------------------|
@@ -172,46 +197,31 @@ Both fields, when present, MUST match the same `^\d+(\.\d+)?$` pattern as
 Agents SHOULD treat hints as the *lower* of (hint, agent's own configured
 cap). A hint cannot override a stricter agent-side limit.
 
-Example:
-
-```json
-{
-  "path": "/report/*",
-  "price_usd": "0.25",
-  "budget_hints": {
-    "recommended_max_per_call": "0.25",
-    "recommended_max_per_session": "2.50"
-  }
-}
-```
-
-### 3.6 Address Format
+### 3.8 Address Format
 
 Both `receiver` and `seller_wallet` MUST be valid Ethereum addresses: the
 prefix `0x` followed by exactly 40 hexadecimal characters (case-insensitive).
 The regex pattern is `^0x[0-9a-fA-F]{40}$`.
 
-These two addresses serve different purposes:
+In a no-splitter architecture (the default starting in v1.2) `receiver` and
+`seller_wallet` SHOULD be the same address — the publisher's own wallet.
+Two distinct addresses are still permitted for publishers who route through
+their own splitter or escrow contract.
 
-- **`receiver`** is the contract or address where payment transactions are
-  sent. This may be a smart contract that handles splitting, escrow, or
-  verification.
-- **`seller_wallet`** is the publisher's own wallet address — the ultimate
-  beneficiary of the payment.
-
-In the simplest case, both fields may contain the same address.
-
-### 3.7 Example
+### 3.9 Example
 
 ```json
 {
-  "version": "1.0",
+  "version": "1.2",
   "protocol": "x402",
   "network": "base",
   "asset": "USDC",
   "receiver": "0x1234567890abcdef1234567890abcdef12345678",
-  "seller_wallet": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-  "facilitator": "https://example.com/verify",
+  "seller_wallet": "0x1234567890abcdef1234567890abcdef12345678",
+  "facilitators": [
+    { "name": "payai", "url": "https://facilitator.payai.network", "priority": 1, "spec_version": "v2" },
+    { "name": "xpay",  "url": "https://facilitator.xpay.sh",       "priority": 2, "spec_version": "v2" }
+  ],
   "contact": "billing@example.com",
   "terms": "https://example.com/terms",
   "rules": [
@@ -264,9 +274,8 @@ Agents SHOULD NOT attempt payment for unmatched paths.
 
 ## 5. Meta Tag Alternative
 
-Publishers who cannot place files in the `/.well-known/` directory (e.g. on
-hosted platforms with restricted file system access) MAY declare pricing
-using an HTML meta tag:
+Publishers who cannot place files in the `/.well-known/` directory MAY
+declare pricing using an HTML meta tag:
 
 ```html
 <meta name="x402"
@@ -289,12 +298,10 @@ The meta tag approach is less expressive than pay.json:
 
 - **No path-based rules.** The meta tag applies a single price to the page
   it appears on.
-- **Requires HTML.** It cannot be used for non-HTML resources (APIs, raw
-  files, media).
-- **Per-page overhead.** Each page must include its own meta tag.
+- **No facilitator list.** Agents fall back to their default stack.
+- **Requires HTML.** It cannot be used for non-HTML resources.
 
-For these reasons, pay.json is the preferred mechanism. The meta tag is
-provided as a fallback for constrained environments.
+For these reasons, pay.json is the preferred mechanism.
 
 ---
 
@@ -304,16 +311,8 @@ When an agent encounters a resource, it SHOULD discover pricing in the
 following order of precedence:
 
 1. **pay.json** (`/.well-known/pay.json`) — the most authoritative source.
-   If a valid pay.json file exists and contains a matching rule, use it.
-
-2. **Meta tag** (`<meta name="x402" ...>`) — if no pay.json is found or no
-   rule matches, check the HTML response for a pricing meta tag.
-
-3. **HTTP 402 response** — if the server returns a `402 Payment Required`
-   status with payment details in headers or body, use those terms.
-
-If none of these sources provide pricing information, the agent SHOULD treat
-the content as free.
+2. **Meta tag** (`<meta name="x402" ...>`) — fallback for HTML responses.
+3. **HTTP 402 response** — terms in headers or body.
 
 Agents MUST NOT combine pricing information from multiple sources. The
 highest-priority source that provides a match is definitive.
@@ -322,18 +321,16 @@ highest-priority source that provides a match is definitive.
 
 ## 7. Backwards Compatibility
 
-The absence of a pay.json file carries a clear semantic meaning: the site
-does not charge AI agents for content access. This standard is entirely
-opt-in.
+The absence of a pay.json file means: the site does not charge AI agents
+for content access. This standard is entirely opt-in.
 
 - No pay.json file = content is free to agents.
 - A pay.json file with no matching rule for a given path = that path is free.
-- A pay.json file with `price_usd` of `"0"` or `"0.00"` = explicitly free
-  (the publisher has considered pricing and chosen not to charge).
+- A pay.json file with `price_usd` of `"0"` or `"0.00"` = explicitly free.
 
-Publishers can adopt pay.json incrementally. Adding the file does not break
-any existing agent behavior — agents that do not understand pay.json will
-simply ignore it.
+v1.2 does **not** accept pre-1.2 documents. Publishers who currently serve
+v1.0 or v1.1 files MUST update to v1.2 before agents that target this spec
+will pay them.
 
 ---
 
@@ -342,7 +339,7 @@ simply ignore it.
 ### 8.1 Transport Security
 
 pay.json MUST be served over HTTPS. Agents MUST reject pay.json files served
-over plain HTTP, as an attacker could modify payment addresses in transit.
+over plain HTTP.
 
 ### 8.2 Address Verification
 
@@ -350,30 +347,27 @@ Agents SHOULD verify that the `receiver` and `seller_wallet` addresses are
 plausible before sending payment. At minimum:
 
 - Validate the address format (checksum-valid Ethereum address).
-- If a `facilitator` endpoint is provided, verify the payment terms with
-  the facilitator before transacting.
+- If a `verifier` endpoint is provided, agents MAY query it after settlement
+  to confirm the on-chain transaction.
 
 Agents MAY maintain allowlists or reputation data for known receiver
 addresses.
 
-### 8.3 Price Bounds
+### 8.3 Facilitator Selection
 
-Agents SHOULD enforce their own maximum price thresholds. A pay.json file
-can claim any price. Agents MUST NOT blindly pay amounts that exceed the
-agent's configured spending limits or the protocol's maximum transaction
-size.
+Agents SHOULD NOT trust the `facilitators` list blindly. A malicious
+publisher could list a facilitator that colludes with them. Agents SHOULD
+maintain their own allow/deny list of facilitators and intersect it with the
+publisher's list.
 
-### 8.4 Rate Limiting
+### 8.4 Price Bounds
+
+Agents SHOULD enforce their own maximum price thresholds.
+
+### 8.5 Rate Limiting
 
 Publishers SHOULD apply rate limiting to the `/.well-known/pay.json`
-endpoint to prevent abuse. Standard HTTP caching headers (`Cache-Control`,
-`ETag`, `Last-Modified`) reduce unnecessary re-fetching.
-
-### 8.5 File Integrity
-
-Publishers MAY provide a cryptographic hash or signature alongside their
-pay.json file to allow agents to verify integrity. This specification does
-not mandate a specific mechanism; future versions may define one.
+endpoint. Standard HTTP caching headers reduce unnecessary re-fetching.
 
 ---
 
@@ -382,27 +376,18 @@ not mandate a specific mechanism; future versions may define one.
 ### 9.1 Unknown Fields
 
 Consumers MUST ignore any fields they do not recognize, both at the
-top level and within rule objects. This allows publishers to include
-additional metadata without breaking existing agent implementations.
-
-The JSON schema sets `additionalProperties: true` at both the top level
-and within rule objects to support forward compatibility.
+top level and within rule and facilitator objects.
 
 ### 9.2 Versioning
 
 The `version` field indicates which version of this specification the file
-conforms to. Future versions will increment the version number (e.g.
-`"1.1"`, `"2.0"`).
-
-Agents that encounter an unrecognized version SHOULD attempt to parse the
-file using the most recent version they support, falling back gracefully if
-parsing fails.
+conforms to. Future versions will increment the version number.
 
 ### 9.3 Future Directions
 
 Areas under consideration for future versions include:
 
-- **Multi-protocol support** — declaring multiple payment options per rule.
+- **Multi-protocol support** — declaring multiple payment protocols per rule.
 - **Dynamic pricing** — time-based or demand-based price adjustments.
 - **Access tiers** — different content quality levels at different prices.
 - **Bulk pricing** — discounts for high-volume agent consumers.
@@ -425,40 +410,31 @@ accordance with [RFC 8615](https://www.rfc-editor.org/rfc/rfc8615).
 
 ## 11. Changelog
 
-### v1.1 — 2026-04-18
+### v1.2 — 2026-04-23
 
-- Added optional per-rule `terms` object (Section 3.4) for billing-model disclosure.
-- Added optional per-rule `budget_hints` object (Section 3.5) for advisory spending caps.
-- `version` enum now accepts `"1.0"` or `"1.1"`.
-- All v1.0 files remain valid under v1.1. No breaking changes.
+- **Breaking:** Removed the single-string `facilitator` field.
+- **Breaking:** `version` enum is now `"1.2"` only. Pre-1.2 documents are no
+  longer accepted by validators conforming to this revision.
+- Added `facilitators[]` array of `{name, url, priority?, spec_version?}`.
+- Added optional top-level `verifier` field.
+- Updated default architecture guidance: `receiver` and `seller_wallet`
+  SHOULD be the same address (no-splitter default).
+- Carried forward `terms` and `budget_hints` per-rule fields from v1.1.
 
-### v1.0 — 2026-03-15
+### v1.1 — 2026-04-18 *(superseded)*
+
+- Added optional per-rule `terms` and `budget_hints` objects.
+
+### v1.0 — 2026-03-15 *(superseded)*
 
 - Initial published version.
 
 ---
 
-## 12. Migration from v1.0
-
-v1.1 is a superset of v1.0:
-
-- A v1.0 file is a valid v1.1 file. No changes required.
-- A v1.0 consumer reading a v1.1 file will safely ignore `terms` and
-  `budget_hints` under §9.1 (Unknown Fields).
-- A v1.1 consumer reading a v1.0 file MUST treat missing `terms` as
-  `{type: "per_use"}` and missing `budget_hints` as absent.
-
-Publishers who set `version: "1.1"` SHOULD populate at least one of the new
-fields on at least one rule — otherwise there is no reason to bump the
-version.
-
----
-
-## 13. References
+## 12. References
 
 - [RFC 8615](https://www.rfc-editor.org/rfc/rfc8615) — Well-Known URIs
 - [RFC 7231](https://www.rfc-editor.org/rfc/rfc7231) — HTTP/1.1 Semantics
-  (defines 402 Payment Required)
 - [EIP-55](https://eips.ethereum.org/EIPS/eip-55) — Ethereum Mixed-case
   checksum address encoding
 - [JSON Schema 2020-12](https://json-schema.org/draft/2020-12/schema) —
@@ -470,6 +446,3 @@ version.
 
 This specification is licensed under
 [Creative Commons Attribution 4.0 International (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
-
-You are free to share and adapt this specification for any purpose, including
-commercial use, provided you give appropriate credit.

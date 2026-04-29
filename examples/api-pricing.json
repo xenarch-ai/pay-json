@@ -1,10 +1,14 @@
 {
-  "version": "1.0",
+  "version": "1.2",
   "protocol": "x402",
   "network": "base",
   "asset": "USDC",
   "receiver": "0x2b4c6d8e0f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c",
-  "seller_wallet": "0x4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f",
+  "seller_wallet": "0x2b4c6d8e0f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c",
+  "facilitators": [
+    { "name": "payai", "url": "https://facilitator.payai.network", "priority": 1, "spec_version": "v2" },
+    { "name": "xpay",  "url": "https://facilitator.xpay.sh",       "priority": 2, "spec_version": "v2" }
+  ],
   "provider": "acme-payments",
   "contact": "api-support@acme-data.com",
   "terms": "https://acme-data.com/api-terms",

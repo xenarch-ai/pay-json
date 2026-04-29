@@ -1,7 +1,7 @@
 """Core pay.json reader.
 
 Fetch a host's `/.well-known/pay.json`, validate its structure against the
-pay.json v1.0 / v1.1 schema, and resolve pricing rules for a URL path.
+pay.json v1.2 specification, and resolve pricing rules for a URL path.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-SUPPORTED_VERSIONS = {"1.0", "1.1"}
+SUPPORTED_VERSIONS = {"1.2"}
 _ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
 _PRICE_RE = re.compile(r"^\d+(\.\d+)?$")
 _REQUIRED_FIELDS = (
@@ -27,6 +27,7 @@ _REQUIRED_FIELDS = (
     "seller_wallet",
     "rules",
 )
+_FACILITATOR_SPEC_VERSIONS = {"v1", "v2"}
 
 
 class PayJsonError(Exception):
@@ -39,6 +40,17 @@ class PayJsonNotFound(PayJsonError):
 
 class PayJsonInvalid(PayJsonError):
     """The fetched document is not a valid pay.json."""
+
+
+@dataclass(frozen=True)
+class Facilitator:
+    """One entry in the publisher's accepted-facilitators list (v1.2)."""
+
+    name: str
+    url: str
+    priority: int | None = None
+    spec_version: str | None = None
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -59,7 +71,8 @@ class PayJson:
     receiver: str
     seller_wallet: str
     rules: tuple[Rule, ...]
-    facilitator: str | None = None
+    facilitators: tuple[Facilitator, ...] = ()
+    verifier: str | None = None
     provider: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
@@ -122,6 +135,11 @@ class PayJson:
             raise PayJsonInvalid("rules must be a non-empty array")
 
         rules = tuple(_parse_rule(r) for r in raw_rules)
+        facilitators = _parse_facilitators(data.get("facilitators"))
+
+        verifier = data.get("verifier")
+        if verifier is not None and not isinstance(verifier, str):
+            raise PayJsonInvalid("verifier must be a string URL")
 
         return cls(
             version=version,
@@ -131,7 +149,8 @@ class PayJson:
             receiver=data["receiver"],
             seller_wallet=data["seller_wallet"],
             rules=rules,
-            facilitator=data.get("facilitator"),
+            facilitators=facilitators,
+            verifier=verifier,
             provider=data.get("provider"),
             raw=data,
         )
@@ -187,6 +206,42 @@ def _parse_rule(raw: Any) -> Rule:
         budget_hints=budget_hints,
         raw=raw,
     )
+
+
+def _parse_facilitators(raw: Any) -> tuple[Facilitator, ...]:
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise PayJsonInvalid("facilitators must be an array")
+    out: list[Facilitator] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise PayJsonInvalid("facilitator entry must be an object")
+        for f in ("name", "url"):
+            if f not in entry:
+                raise PayJsonInvalid(f"facilitator missing required field: {f}")
+        if not isinstance(entry["name"], str) or not entry["name"]:
+            raise PayJsonInvalid("facilitator name must be a non-empty string")
+        if not isinstance(entry["url"], str) or not entry["url"]:
+            raise PayJsonInvalid("facilitator url must be a non-empty string")
+        priority = entry.get("priority")
+        if priority is not None and not isinstance(priority, int):
+            raise PayJsonInvalid("facilitator priority must be an integer")
+        spec_version = entry.get("spec_version")
+        if spec_version is not None and spec_version not in _FACILITATOR_SPEC_VERSIONS:
+            raise PayJsonInvalid(
+                f"facilitator spec_version must be one of {sorted(_FACILITATOR_SPEC_VERSIONS)}"
+            )
+        out.append(
+            Facilitator(
+                name=entry["name"],
+                url=entry["url"],
+                priority=priority,
+                spec_version=spec_version,
+                raw=entry,
+            )
+        )
+    return tuple(out)
 
 
 def _path_matches(pattern: str, path: str) -> bool:

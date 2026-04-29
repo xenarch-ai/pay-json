@@ -3,13 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pay-json"
-version = "1.1.0"
+name = "pay.json"
+version = "1.2.0"
 description = "Python reader for the pay.json standard — machine-readable pricing for AI agents."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "pay.json community" }]
+authors = [
+    { name = "Xenarch", email = "hello@xenarch.dev" },
+    { name = "pay.json community" },
+]
 keywords = ["pay.json", "x402", "ai-agents", "micropayments", "pricing"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
@@ -32,8 +35,8 @@ test = [
 
 [project.urls]
 Homepage = "https://payjson.org"
-Repository = "https://github.com/xenarch/pay-json"
-Specification = "https://github.com/xenarch/pay-json/blob/main/spec/pay-json-v1.md"
+Repository = "https://github.com/xenarch-ai/pay-json"
+Specification = "https://github.com/xenarch-ai/pay-json/blob/main/spec/pay-json-v1.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pay_json"]

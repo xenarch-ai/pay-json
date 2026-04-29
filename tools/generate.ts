@@ -6,42 +6,63 @@ import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { compileValidator } from "./schema.js";
 
+interface FacilitatorEntry {
+  name: string;
+  url: string;
+  priority?: number;
+  spec_version?: "v1" | "v2";
+}
+
 interface GenerateOptions {
   wallet: string;
-  receiver: string;
+  receiver?: string;
   price?: string;
   protocol?: string;
   network?: string;
   asset?: string;
-  facilitator?: string;
+  facilitators?: FacilitatorEntry[];
+  verifier?: string;
   provider?: string;
   output?: string;
 }
 
 const WALLET_RE = /^0x[0-9a-fA-F]{40}$/;
 
+const DEFAULT_FACILITATORS: FacilitatorEntry[] = [
+  { name: "payai",        url: "https://facilitator.payai.network", priority: 1, spec_version: "v2" },
+  { name: "xpay",         url: "https://facilitator.xpay.sh",       priority: 2, spec_version: "v2" },
+  { name: "ultravioleta", url: "https://x402.ultravioleta.dev",     priority: 3, spec_version: "v2" },
+];
+
 export function generate(options: GenerateOptions): Record<string, unknown> {
   if (!WALLET_RE.test(options.wallet)) {
     throw new Error(`Invalid wallet address: ${options.wallet}`);
   }
-  if (!WALLET_RE.test(options.receiver)) {
-    throw new Error(`Invalid receiver address: ${options.receiver}`);
+  // No-splitter default: receiver === seller_wallet. Callers MAY pass a
+  // distinct receiver (e.g. their own escrow contract) explicitly.
+  const receiver = options.receiver ?? options.wallet;
+  if (!WALLET_RE.test(receiver)) {
+    throw new Error(`Invalid receiver address: ${receiver}`);
   }
 
   const payJson: Record<string, unknown> = {
-    version: "1.0",
+    version: "1.2",
     protocol: options.protocol ?? "x402",
     network: options.network ?? "base",
     asset: options.asset ?? "USDC",
-    receiver: options.receiver,
+    receiver,
     seller_wallet: options.wallet,
     rules: [
       { path: "/**", price_usd: options.price ?? "0.003" },
     ],
   };
 
-  if (options.facilitator) {
-    payJson.facilitator = options.facilitator;
+  if (options.facilitators && options.facilitators.length > 0) {
+    payJson.facilitators = options.facilitators;
+  }
+
+  if (options.verifier) {
+    payJson.verifier = options.verifier;
   }
 
   if (options.provider) {
@@ -89,6 +110,34 @@ function parseArgs(args: string[]): Record<string, string> {
   return result;
 }
 
+// Parse a comma-separated list of "name=url" pairs (optionally
+// "name=url@v1" / "@v2" to set spec_version) into FacilitatorEntry[].
+function parseFacilitators(raw: string): FacilitatorEntry[] {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((entry, idx) => {
+      const eq = entry.indexOf("=");
+      if (eq < 1) {
+        throw new Error(
+          `Invalid --facilitators entry "${entry}" — expected "name=url[@v1|@v2]"`
+        );
+      }
+      const name = entry.slice(0, eq);
+      let url = entry.slice(eq + 1);
+      let spec_version: "v1" | "v2" | undefined;
+      const at = url.lastIndexOf("@");
+      if (at > 0 && (url.endsWith("@v1") || url.endsWith("@v2"))) {
+        spec_version = url.endsWith("@v2") ? "v2" : "v1";
+        url = url.slice(0, at);
+      }
+      const out: FacilitatorEntry = { name, url, priority: idx + 1 };
+      if (spec_version) out.spec_version = spec_version;
+      return out;
+    });
+}
+
 async function interactive(): Promise<GenerateOptions> {
   const rl = createInterface({
     input: process.stdin,
@@ -101,16 +150,10 @@ async function interactive(): Promise<GenerateOptions> {
     throw new Error(`Invalid wallet address: ${wallet}`);
   }
 
-  const receiver = await rl.question("Receiver/splitter contract address (0x...): ");
-  if (!WALLET_RE.test(receiver)) {
-    rl.close();
-    throw new Error(`Invalid receiver address: ${receiver}`);
-  }
-
   const price = (await rl.question("Default price in USD (0.003): ")) || "0.003";
   rl.close();
 
-  return { wallet, receiver, price };
+  return { wallet, price };
 }
 
 async function main() {
@@ -119,21 +162,23 @@ async function main() {
 
   let options: GenerateOptions;
 
-  if (!parsed.wallet || !parsed.receiver) {
+  if (!parsed.wallet) {
     if (process.stdin.isTTY) {
       options = await interactive();
     } else {
       console.error(
-        "Usage: pay-json-generate --wallet <address> --receiver <address> [options]\n\n" +
+        "Usage: pay-json-generate --wallet <address> [options]\n\n" +
           "Options:\n" +
-          "  --wallet <address>       Publisher wallet (required)\n" +
-          "  --receiver <address>     Splitter contract address (required)\n" +
+          "  --wallet <address>       Publisher wallet (required, also used as receiver by default)\n" +
+          "  --receiver <address>     Override receiver (default: same as --wallet, no-splitter)\n" +
           "  --price <usd>            Default price (default: 0.003)\n" +
           "  --protocol <proto>       Payment protocol (default: x402)\n" +
           "  --network <net>          Network (default: base)\n" +
           "  --asset <asset>          Asset (default: USDC)\n" +
-          "  --facilitator <url>      Facilitator URL (optional)\n" +
-          "  --provider <name>        Provider name (optional, auto-includes tools for known providers)\n" +
+          "  --facilitators <list>    Comma-separated facilitator entries: name=url[@v1|@v2]\n" +
+          "                           (e.g. payai=https://facilitator.payai.network@v2,xpay=https://facilitator.xpay.sh@v2)\n" +
+          "  --verifier <url>         Optional independent verifier endpoint URL\n" +
+          "  --provider <name>        Provider name (optional, auto-includes tools for xenarch)\n" +
           "  --output <file>          Output file (default: stdout)"
       );
       process.exit(1);
@@ -143,9 +188,19 @@ async function main() {
       console.error(`Invalid wallet address: ${parsed.wallet}`);
       process.exit(1);
     }
-    if (!WALLET_RE.test(parsed.receiver)) {
+    if (parsed.receiver && !WALLET_RE.test(parsed.receiver)) {
       console.error(`Invalid receiver address: ${parsed.receiver}`);
       process.exit(1);
+    }
+
+    let facilitators: FacilitatorEntry[] | undefined;
+    if (parsed.facilitators) {
+      try {
+        facilitators = parseFacilitators(parsed.facilitators);
+      } catch (err) {
+        console.error((err as Error).message);
+        process.exit(1);
+      }
     }
 
     options = {
@@ -155,7 +210,8 @@ async function main() {
       protocol: parsed.protocol,
       network: parsed.network,
       asset: parsed.asset,
-      facilitator: parsed.facilitator,
+      facilitators,
+      verifier: parsed.verifier,
       provider: parsed.provider,
       output: parsed.output,
     };

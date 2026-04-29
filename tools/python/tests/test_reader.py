@@ -1,4 +1,4 @@
-"""Tests for the pay.json Python reader."""
+"""Tests for the pay.json Python reader (v1.2)."""
 
 import json
 from decimal import Decimal
@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from pay_json import PayJson, PayJsonInvalid, PayJsonNotFound, Rule
+from pay_json import Facilitator, PayJson, PayJsonInvalid, PayJsonNotFound, Rule
 from pay_json.reader import _build_url, _path_matches
 
 EXAMPLES = Path(__file__).resolve().parent.parent.parent.parent / "examples"
@@ -18,16 +18,16 @@ def _load(name: str) -> dict:
     return json.loads((EXAMPLES / name).read_text())
 
 
-class TestParseV10:
+class TestParse:
     def test_basic_example_parses(self):
         doc = PayJson.parse(_load("basic.json"))
-        assert doc.version == "1.0"
+        assert doc.version == "1.2"
         assert doc.protocol == "x402"
         assert len(doc.rules) == 3
         assert doc.rules[-1].price_usd == Decimal("0.003")
 
     def test_missing_required_field_raises(self):
-        bad = {"version": "1.0"}
+        bad = {"version": "1.2"}
         with pytest.raises(PayJsonInvalid, match="missing required field"):
             PayJson.parse(bad)
 
@@ -43,7 +43,13 @@ class TestParseV10:
         with pytest.raises(PayJsonInvalid, match="invalid price_usd"):
             PayJson.parse(doc)
 
-    def test_unsupported_version_raises(self):
+    def test_pre_1_2_version_raises(self):
+        doc = _load("basic.json")
+        doc["version"] = "1.0"
+        with pytest.raises(PayJsonInvalid, match="unsupported version"):
+            PayJson.parse(doc)
+
+    def test_unknown_future_version_raises(self):
         doc = _load("basic.json")
         doc["version"] = "2.0"
         with pytest.raises(PayJsonInvalid, match="unsupported version"):
@@ -56,10 +62,10 @@ class TestParseV10:
             PayJson.parse(doc)
 
 
-class TestParseV11:
+class TestTermsAndBudgetHints:
     def test_terms_and_budget_hints_parsed(self):
-        doc = PayJson.parse(_load("v1.1-with-terms.json"))
-        assert doc.version == "1.1"
+        doc = PayJson.parse(_load("v1.2-with-facilitators.json"))
+        assert doc.version == "1.2"
         inference = doc.rules[0]
         assert inference.terms == {"type": "per_unit", "unit": "1000_tokens"}
         assert inference.budget_hints == {
@@ -67,30 +73,84 @@ class TestParseV11:
             "recommended_max_per_session": "1.00",
         }
 
-    def test_v10_file_parses_under_v11_consumer(self):
-        """§12 migration: v1.0 files remain valid. Reader supports both."""
+    def test_basic_example_has_no_terms_or_hints(self):
         doc = PayJson.parse(_load("basic.json"))
-        assert doc.version == "1.0"
         for rule in doc.rules:
             assert rule.terms is None
             assert rule.budget_hints is None
 
     def test_rule_missing_terms_type_raises(self):
-        doc = _load("v1.1-with-terms.json")
+        doc = _load("v1.2-with-facilitators.json")
         doc["rules"][0]["terms"] = {"unit": "token"}  # missing 'type'
         with pytest.raises(PayJsonInvalid, match="terms must be"):
             PayJson.parse(doc)
 
     def test_invalid_budget_hint_raises(self):
-        doc = _load("v1.1-with-terms.json")
+        doc = _load("v1.2-with-facilitators.json")
         doc["rules"][0]["budget_hints"]["recommended_max_per_call"] = "free"
         with pytest.raises(PayJsonInvalid, match="recommended_max_per_call"):
             PayJson.parse(doc)
 
 
+class TestFacilitators:
+    def test_parses_facilitators_array(self):
+        doc = PayJson.parse(_load("multi-tier.json"))
+        assert len(doc.facilitators) == 3
+        first = doc.facilitators[0]
+        assert isinstance(first, Facilitator)
+        assert first.name == "payai"
+        assert first.url == "https://facilitator.payai.network"
+        assert first.priority == 1
+        assert first.spec_version == "v2"
+
+    def test_facilitators_default_to_empty_tuple(self):
+        doc = PayJson.parse(_load("basic.json"))
+        assert doc.facilitators == ()
+
+    def test_missing_name_raises(self):
+        doc = _load("multi-tier.json")
+        del doc["facilitators"][0]["name"]
+        with pytest.raises(PayJsonInvalid, match="facilitator missing required field: name"):
+            PayJson.parse(doc)
+
+    def test_missing_url_raises(self):
+        doc = _load("multi-tier.json")
+        del doc["facilitators"][0]["url"]
+        with pytest.raises(PayJsonInvalid, match="facilitator missing required field: url"):
+            PayJson.parse(doc)
+
+    def test_invalid_spec_version_raises(self):
+        doc = _load("multi-tier.json")
+        doc["facilitators"][0]["spec_version"] = "v3"
+        with pytest.raises(PayJsonInvalid, match="spec_version must be"):
+            PayJson.parse(doc)
+
+    def test_non_array_facilitators_raises(self):
+        doc = _load("basic.json")
+        doc["facilitators"] = "https://facilitator.payai.network"
+        with pytest.raises(PayJsonInvalid, match="facilitators must be an array"):
+            PayJson.parse(doc)
+
+
+class TestVerifier:
+    def test_verifier_parsed(self):
+        doc = PayJson.parse(_load("multi-tier.json"))
+        assert doc.verifier == "https://xenarch.dev/v1/verify"
+
+    def test_verifier_optional(self):
+        doc = PayJson.parse(_load("basic.json"))
+        assert doc.verifier is None
+
+    def test_non_string_verifier_raises(self):
+        doc = _load("basic.json")
+        doc["verifier"] = 123
+        with pytest.raises(PayJsonInvalid, match="verifier must be a string URL"):
+            PayJson.parse(doc)
+
+
 class TestMatchRule:
     def setup_method(self):
-        self.doc = PayJson.parse(_load("v1.1-with-terms.json"))
+        self.doc = PayJson.parse(_load("v1.2-with-facilitators.json"))
 
     def test_matches_nested_glob(self):
         rule = self.doc.match_rule("/api/inference/gpt4")
@@ -128,7 +188,7 @@ class TestFetch:
             return_value=httpx.Response(200, json=doc)
         )
         result = PayJson.fetch("example.com")
-        assert result.version == "1.0"
+        assert result.version == "1.2"
 
     @respx.mock
     def test_fetch_404_raises_not_found(self):
@@ -145,7 +205,7 @@ class TestFetch:
             return_value=httpx.Response(200, json=doc)
         )
         result = PayJson.fetch("https://example.com/some/path")
-        assert result.version == "1.0"
+        assert result.version == "1.2"
 
     @respx.mock
     def test_fetch_invalid_json_raises(self):
