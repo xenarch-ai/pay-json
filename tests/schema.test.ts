@@ -161,7 +161,7 @@ describe("pay-json v1.2 schema", () => {
 
   it("accepts optional verifier URL", () => {
     const data = baseDoc();
-    data.verifier = "https://xenarch.dev/v1/verify";
+    data.verifier = "https://xenarch.dev/v1/gates";
     expect(validate(data)).toBe(true);
   });
 
