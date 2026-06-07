@@ -50,10 +50,10 @@ describe("generate function", () => {
   it("includes verifier when supplied", () => {
     const result = generate({
       wallet,
-      verifier: "https://xenarch.dev/v1/verify",
+      verifier: "https://xenarch.dev/v1/gates",
     });
     expect(validate(result)).toBe(true);
-    expect(result.verifier).toBe("https://xenarch.dev/v1/verify");
+    expect(result.verifier).toBe("https://xenarch.dev/v1/gates");
   });
 
   it("auto-includes xenarch tools block when provider=xenarch", () => {
