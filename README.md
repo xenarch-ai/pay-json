@@ -25,7 +25,7 @@ pay.json tells AI agents what content costs and how to pay for it. Publishers pl
 }
 ```
 
-`facilitators[]` lets the publisher list which x402 facilitators they
+`facilitators[]` lets the publisher list which x402 settlement providers they
 accept. Agents try them in order and fall back through the list. No single
 intermediary sits in the money path.
 

@@ -26,7 +26,7 @@ if rule:
 ```
 
 Targets pay.json v1.2 (the current spec). v1.2 introduces a
-`facilitators[]` array (multi-facilitator failover), an optional
+`facilitators[]` array (multi-settlement provider failover), an optional
 `verifier` endpoint, and drops the pre-1.2 single-string `facilitator`
 field. Pre-1.2 documents are not accepted.
 

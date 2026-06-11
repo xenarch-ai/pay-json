@@ -33,14 +33,14 @@ communicate pricing to these agents that is:
 - **Zero-code** — a static JSON file, no server-side logic required.
 - **Host-agnostic** — works on any web server, CDN, or static host.
 - **Protocol-flexible** — supports any payment protocol, starting with x402.
-- **Facilitator-agnostic** — publishers list the facilitators they accept,
+- **Settlement-provider-agnostic** — publishers list the settlement providers they accept,
   agents pick one and fall back through the list. No single intermediary
   is in the money path.
 
 pay.json solves this by giving publishers a declarative way to say: "This
 content costs X, pay to address Y, using protocol Z, settled through any of
-these facilitators." Agents read the file, evaluate the rules, choose a
-facilitator, and pay — all before requesting the protected resource.
+these settlement providers." Agents read the file, evaluate the rules, choose a
+settlement provider, and pay — all before requesting the protected resource.
 
 ---
 
@@ -80,7 +80,7 @@ A pay.json file is a JSON object with the following fields:
 | `receiver`      | Yes      | string   | Address that receives payment. Ethereum address format (`0x` + 40 hex).  |
 | `seller_wallet` | Yes      | string   | Publisher's wallet address. Ethereum address format (`0x` + 40 hex).     |
 | `rules`         | Yes      | array    | Ordered list of path-to-price rules. See Section 3.2.                    |
-| `facilitators`  | No       | array    | Ordered list of accepted facilitators. See Section 3.3.                  |
+| `facilitators`  | No       | array    | Ordered list of accepted settlement providers. See Section 3.3.                  |
 | `verifier`      | No       | string   | Optional independent verifier endpoint URI. See Section 3.4.             |
 | `provider`      | No       | string   | Payment infrastructure provider identifier.                              |
 | `contact`       | No       | string   | Publisher contact information (email, URL, or other identifier).         |
@@ -103,19 +103,19 @@ The `price_usd` field is a string rather than a number to avoid
 floating-point precision issues. It MUST match the pattern `^\d+(\.\d+)?$`
 (one or more digits, optionally followed by a decimal point and more digits).
 
-### 3.3 Facilitators Array
+### 3.3 Settlement Providers Array
 
-The optional `facilitators` field is an ordered array of facilitator entries
+The optional `facilitators` field is an ordered array of settlement provider entries
 the publisher is willing to settle through. Each entry has:
 
 | Field          | Required | Type    | Description                                                       |
 |----------------|----------|---------|-------------------------------------------------------------------|
 | `name`         | Yes      | string  | Short identifier (e.g. `"payai"`, `"xpay"`, `"ultravioleta"`).    |
-| `url`          | Yes      | string  | Facilitator base URL.                                             |
+| `url`          | Yes      | string  | Settlement provider base URL.                                             |
 | `priority`     | No       | integer | Lower numbers preferred. Equal priorities MAY be load-balanced.   |
-| `spec_version` | No       | string  | x402 spec version this facilitator implements: `"v1"` or `"v2"`.  |
+| `spec_version` | No       | string  | x402 spec version this settlement provider implements: `"v1"` or `"v2"`.  |
 
-Agents SHOULD attempt facilitators in array order (or by `priority` if
+Agents SHOULD attempt settlement providers in array order (or by `priority` if
 present) and fall back through the list on failure.
 
 When `facilitators` is absent or empty, agents SHOULD fall back to a
@@ -126,7 +126,7 @@ default.
 `spec_version` matters because the V1 retry header is `X-PAYMENT` and the
 V2 retry header is `PAYMENT-SIGNATURE` — agents that hardcode one will
 silently fail against the other. When omitted, agents SHOULD probe the
-facilitator's 402 response to detect the version.
+settlement provider's 402 response to detect the version.
 
 Example:
 
@@ -141,16 +141,16 @@ Example:
 ### 3.4 Verifier Field
 
 The optional `verifier` field is a URL where agents MAY query to verify
-settlement independently of the facilitator that performed it. This is the
+settlement independently of the settlement provider that performed it. This is the
 hook used by the Xenarch commercial layer to issue signed Ed25519 receipts
 that prove a settlement on behalf of a publisher.
 
-The verifier is decoupled from facilitators on purpose: a publisher MAY
-accept settlement through any of N facilitators while delegating receipt
+The verifier is decoupled from settlement providers on purpose: a publisher MAY
+accept settlement through any of N settlement providers while delegating receipt
 issuance to a single trusted verifier.
 
 When omitted, agents SHOULD treat settlement as confirmed by the
-facilitator's `X-PAYMENT-RESPONSE` (V1) or `PAYMENT-RESPONSE` (V2) header
+settlement provider's `X-PAYMENT-RESPONSE` (V1) or `PAYMENT-RESPONSE` (V2) header
 and an on-chain transaction hash.
 
 ### 3.5 Tools Object
@@ -298,7 +298,7 @@ The meta tag approach is less expressive than pay.json:
 
 - **No path-based rules.** The meta tag applies a single price to the page
   it appears on.
-- **No facilitator list.** Agents fall back to their default stack.
+- **No settlement provider list.** Agents fall back to their default stack.
 - **Requires HTML.** It cannot be used for non-HTML resources.
 
 For these reasons, pay.json is the preferred mechanism.
@@ -353,11 +353,11 @@ plausible before sending payment. At minimum:
 Agents MAY maintain allowlists or reputation data for known receiver
 addresses.
 
-### 8.3 Facilitator Selection
+### 8.3 Settlement Provider Selection
 
 Agents SHOULD NOT trust the `facilitators` list blindly. A malicious
-publisher could list a facilitator that colludes with them. Agents SHOULD
-maintain their own allow/deny list of facilitators and intersect it with the
+publisher could list a settlement provider that colludes with them. Agents SHOULD
+maintain their own allow/deny list of settlement providers and intersect it with the
 publisher's list.
 
 ### 8.4 Price Bounds
@@ -376,7 +376,7 @@ endpoint. Standard HTTP caching headers reduce unnecessary re-fetching.
 ### 9.1 Unknown Fields
 
 Consumers MUST ignore any fields they do not recognize, both at the
-top level and within rule and facilitator objects.
+top level and within rule and settlement provider objects.
 
 ### 9.2 Versioning
 
