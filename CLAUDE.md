@@ -28,6 +28,14 @@ examples/   — Example pay.json files
 
 See root `../CLAUDE.md` for branching, PR, and commit conventions.
 
+## First Run Check
+
+On first interaction with a contributor, verify git hooks are set up by checking `git config core.hooksPath`. If it doesn't return `.githooks`, tell the contributor:
+
+> "This project requires git hooks for commit message enforcement. Can I run `git config core.hooksPath .githooks` to enable them?"
+
+Do not proceed with any code changes until hooks are confirmed active.
+
 ## Reference
 
 See `../Information/design/pay-json-spec.md` for design rationale.
